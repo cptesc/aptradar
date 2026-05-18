@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APT Radar</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --header-bg: #1a1a2e;
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --green-bg: #dcfce7; --green-text: #166534;
+      --yellow-bg: #fef9c3; --yellow-text: #854d0e;
+      --red-bg: #fee2e2; --red-text: #991b1b;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--header-bg);
+      color: #fff;
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .header-icon { font-size: 1.75rem; }
+    .header-title { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+    .header-sub { font-size: 0.8125rem; opacity: 0.6; margin-top: 1px; }
+
+    /* ── Layout ── */
+    main { max-width: 1280px; margin: 0 auto; padding: 24px 20px 60px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow);
+    }
+    .card-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    /* ── Area tags ── */
+    .area-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+    .area-tag {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.13s;
+      user-select: none;
+    }
+    .area-tag.active {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .area-tag:hover:not(.active) { border-color: #94a3b8; color: var(--text); }
+
+    /* ── Filter chip bar ── */
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+    .filter-divider { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+
+    /* Area type toggle (pill pair) */
+    .area-type-group {
+      display: flex;
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+    .area-type-group .chip {
+      border: none;
+      border-radius: 0;
+      padding: 5px 14px;
+    }
+    .area-type-group .chip + .chip { border-left: 1px solid var(--border); }
+
+    /* Generic chip */
+    .chip {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      color: var(--text);
+      transition: all 0.13s;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .chip:hover:not(.active) { border-color: #94a3b8; }
+    .chip.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* ── Dropdown panel ── */
+    .panel-container { margin-top: 12px; }
+    .panel {
+      border: 1.5px solid var(--primary);
+      border-radius: var(--radius);
+      padding: 16px;
+      background: #fafbff;
+    }
+    .panel-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--primary);
+      margin-bottom: 14px;
+    }
+    .panel-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .panel-row input[type="number"] {
+      width: 130px;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 0.875rem;
+      color: var(--text);
+      background: var(--surface);
+    }
+    .panel-row input[type="number"]:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+    }
+    .panel-sep { color: var(--muted); }
+    .panel-unit { font-size: 0.8125rem; color: var(--muted); }
+
+    /* Slider */
+    .slider-wrap { display: flex; align-items: center; gap: 14px; width: 100%; }
+    input[type="range"] {
+      flex: 1;
+      height: 5px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+    .slider-display {
+      min-width: 52px;
+      text-align: right;
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    /* Panel actions */
+    .panel-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .btn-ghost {
+      padding: 6px 14px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .btn-ghost:hover { border-color: #94a3b8; color: var(--text); }
+    .btn-primary {
+      padding: 6px 18px;
+      border-radius: 7px;
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    /* ── Analyze button ── */
+    .analyze-btn {
+      width: 100%;
+      padding: 15px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.13s;
+      letter-spacing: 0.01em;
+    }
+    .analyze-btn:hover:not(:disabled) { background: var(--primary-hover); }
+    .analyze-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    /* ── Loading ── */
+    #loading {
+      text-align: center;
+      padding: 48px 20px;
+    }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      margin: 0 auto 18px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-msg { font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .loading-sub { font-size: 0.8125rem; color: var(--muted); }
+    .loading-timer { font-size: 0.875rem; color: var(--primary); margin-top: 10px; font-weight: 600; }
+
+    /* ── Error ── */
+    .error-box {
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      background: var(--red-bg);
+      color: var(--red-text);
+      border: 1px solid #fca5a5;
+      margin-top: 12px;
+      font-size: 0.875rem;
+    }
+
+    /* ── Results ── */
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .results-title { font-size: 1rem; font-weight: 700; }
+    .results-meta { font-size: 0.8125rem; color: var(--muted); margin-top: 2px; }
+    .btn-download {
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1.5px solid var(--primary);
+      background: var(--surface);
+      color: var(--primary);
+      font-size: 0.8125rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.13s;
+    }
+    .btn-download:hover { background: var(--primary); color: #fff; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    thead th {
+      padding: 9px 12px;
+      text-align: left;
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1.5px solid var(--border);
+    }
+    thead th.num { text-align: right; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8f9ff; }
+    tbody td { padding: 10px 12px; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.rank { font-weight: 700; color: var(--muted); width: 40px; }
+    td.name a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    td.name a:hover { text-decoration: underline; }
+
+    /* Cycle badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-GREEN { background: var(--green-bg); color: var(--green-text); }
+    .badge-YELLOW { background: var(--yellow-bg); color: var(--yellow-text); }
+    .badge-RED { background: var(--red-bg); color: var(--red-text); }
+
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="header-icon">🏠</span>
+  <div>
+    <div class="header-title">APT Radar</div>
+    <div class="header-sub">아파트 가격 사이클 분석</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- 지역 선택 -->
+  <div class="card">
+    <div class="card-label">지역 선택</div>
+    <div class="area-tags" id="area-tags">
+      {% for area in areas %}
+      <button class="area-tag active" data-area="{{ area }}" onclick="toggleArea('{{ area }}')">{{ area }}</button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- 필터 -->
+  <div class="card">
+    <div class="card-label">필터</div>
+    <div class="filter-bar">
+      <!-- 면적 토글 -->
+      <div class="area-type-group">
+        <button class="chip active" id="chip-84" onclick="setAreaType(84)">84㎡</button>
+        <button class="chip" id="chip-59" onclick="setAreaType(59)">59㎡</button>
+      </div>
+
+      <div class="filter-divider"></div>
+
+      <button class="chip" id="chip-ask_price" onclick="togglePanel('ask_price')">호가 범위</button>
+      <button class="chip" id="chip-household" onclick="togglePanel('household')">세대수</button>
+      <button class="chip" id="chip-year_built" onclick="togglePanel('year_built')">입주년도</button>
+      <button class="chip" id="chip-ask_rate" onclick="togglePanel('ask_rate')">호가회복률 상한</button>
+      <button class="chip" id="chip-trade_rate" onclick="togglePanel('trade_rate')">실거래회복률 상한</button>
+      <button class="chip" id="chip-floor_ratio" onclick="togglePanel('floor_ratio')">용적률</button>
+      <button class="chip" id="chip-peak_year" onclick="togglePanel('peak_year')">전고점 기준연도</button>
+    </div>
+
+    <!-- 드롭다운 패널 -->
+    <div class="panel-container" id="panel-container" hidden>
+
+      <div class="panel" id="panel-ask_price" hidden>
+        <div class="panel-title">호가 범위</div>
+        <div class="panel-row">
+          <input type="number" id="ask_price_min" placeholder="최소" min="0" step="500">
+          <span class="panel-sep">~</span>
+          <input type="number" id="ask_price_max" placeholder="최대" min="0" step="500">
+          <span class="panel-unit">만원</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-ghost" onclick="clearFilter('ask_price')">초기화</button>
+          <button class="btn-primary" onclick="applyFilter('ask_price')">적용</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-household" hidden>
+        <div class="panel-title">세대수</div>
+        <div class="panel-row">
+          <input type="number" id="household_min" placeholder="최소 세대수" min="0" step="100">
+          <span class="panel-unit">세대 이상</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-ghost" onclick="clearFilter('household')">초기화</button>
+          <button class="btn-primary" onclick="applyFilter('household')">적용</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-year_built" hidden>
+        <div class="panel-title">입주년도</div>
+        <div class="panel-row">
+          <input type="number" id="year_built_min" placeholder="예: 2010" min="1980" max="2030">
+          <span class="panel-unit">년 이후</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-ghost" onclick="clearFilter('year_built')">초기화</button>
+          <button class="btn-primary" onclick="applyFilter('year_built')">적용</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-ask_rate" hidden>
+        <div class="panel-title">호가회복률 상한</div>
+        <div class="panel-row slider-wrap">
+          <input type="range" id="ask_rate_slider" min="0" max="200" step="5" value="100"
+            oninput="document.getElementById('ask_rate_disp').textContent=this.value+'%'">
+          <span class="slider-display" id="ask_rate_disp">100%</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-ghost" onclick="clearFilter('ask_rate')">초기화</button>
+          <button class="btn-primary" onclick="applyFilter('ask_rate')">적용</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-trade_rate" hidden>
+        <div class="panel-title">실거래회복률 상한</div>
+        <div class="panel-row slider-wrap">
+          <input type="range" id="trade_rate_slider" min="0" max="200" step="5" value="100"
+            oninput="document.getElementById('trade_rate_disp').textContent=this.value+'%'">
+          <span class="slider-display" id="trade_rate_disp">100%</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-ghost" onclick="clearFilter('trade_rate')">초기화</button>
+          <button class="btn-primary" onclick="applyFilter('trade_rate')">적용</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-floor_ratio" hidden>
+        <div class="panel-title">용적률</div>
+        <div class="panel-row">
+          <input type="number" id="floor_ratio_min" placeholder="최소" min="0" step="10">
+          <span class="panel-sep">~</span>
+          <input type="number" id="floor_ratio_max" placeholder="최대" min="0" step="10">
+          <span class="panel-unit">%</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-ghost" onclick="clearFilter('floor_ratio')">초기화</button>
+          <button class="btn-primary" onclick="applyFilter('floor_ratio')">적용</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-peak_year" hidden>
+        <div class="panel-title">전고점 기준연도</div>
+        <div class="panel-row">
+          <input type="number" id="peak_year_input" value="2019" min="2010" max="2030">
+          <span class="panel-unit">년 이후 최고가 기준</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-ghost" onclick="clearFilter('peak_year')">초기화</button>
+          <button class="btn-primary" onclick="applyFilter('peak_year')">적용</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 분석 시작 -->
+  <button class="analyze-btn" id="analyze-btn" onclick="startAnalysis()">분석 시작</button>
+
+  <!-- 로딩 -->
+  <div id="loading" hidden>
+    <div class="spinner"></div>
+    <div class="loading-msg">분석 중입니다...</div>
+    <div class="loading-sub">Naver 매물 수집 → 실거래 매칭 → 지표 계산 순으로 진행됩니다</div>
+    <div class="loading-timer" id="loading-timer">경과 0초</div>
+  </div>
+
+  <!-- 에러 -->
+  <div id="error-box" class="error-box" hidden></div>
+
+  <!-- 결과 -->
+  <div id="results-section" hidden style="margin-top:16px;">
+    <div class="card">
+      <div class="results-header">
+        <div>
+          <div class="results-title">분석 결과</div>
+          <div class="results-meta" id="results-meta"></div>
+        </div>
+        <button class="btn-download" onclick="downloadExcel()">
+          <span>📥</span> 엑셀 다운로드
+        </button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>등수</th>
+              <th>단지명</th>
+              <th>지역</th>
+              <th class="num">평당가(만)</th>
+              <th class="num">호가(만)</th>
+              <th class="num">최근실거래가</th>
+              <th class="num">전고점</th>
+              <th class="num">호가회복률</th>
+              <th class="num">실거래회복률</th>
+              <th>상태</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  // ── 상태 ─────────────────────────────────────────────────────────────────
+  const AREAS = {{ areas | tojson }};
+  const activeAreas = new Set(AREAS);
+  let areaType = 84;
+  let openPanel = null;
+  let jobId = null;
+  let pollTimer = null;
+  let elapsedTimer = null;
+  let elapsedSec = 0;
+
+  const filterState = {
+    ask_price:  { active: false, min: null, max: null },
+    household:  { active: false, min: null },
+    year_built: { active: false, min: null },
+    ask_rate:   { active: false, max: null },
+    trade_rate: { active: false, max: null },
+    floor_ratio:{ active: false, min: null, max: null },
+    peak_year:  { active: false, value: 2019 },
+  };
+
+  const DEFAULT_LABELS = {
+    ask_price: '호가 범위', household: '세대수', year_built: '입주년도',
+    ask_rate: '호가회복률 상한', trade_rate: '실거래회복률 상한',
+    floor_ratio: '용적률', peak_year: '전고점 기준연도',
+  };
+
+  // ── 지역 토글 ─────────────────────────────────────────────────────────────
+  function toggleArea(area) {
+    if (activeAreas.has(area)) {
+      if (activeAreas.size > 1) activeAreas.delete(area);
+    } else {
+      activeAreas.add(area);
+    }
+    document.querySelectorAll('.area-tag').forEach(el => {
+      el.classList.toggle('active', activeAreas.has(el.dataset.area));
+    });
+  }
+
+  // ── 면적 타입 ─────────────────────────────────────────────────────────────
+  function setAreaType(type) {
+    areaType = type;
+    document.getElementById('chip-84').classList.toggle('active', type === 84);
+    document.getElementById('chip-59').classList.toggle('active', type === 59);
+  }
+
+  // ── 패널 토글 ─────────────────────────────────────────────────────────────
+  function togglePanel(key) {
+    const container = document.getElementById('panel-container');
+    if (openPanel === key) {
+      closePanel();
+    } else {
+      if (openPanel) document.getElementById('panel-' + openPanel).hidden = true;
+      openPanel = key;
+      document.getElementById('panel-' + key).hidden = false;
+      container.hidden = false;
+    }
+  }
+
+  function closePanel() {
+    if (openPanel) document.getElementById('panel-' + openPanel).hidden = true;
+    document.getElementById('panel-container').hidden = true;
+    openPanel = null;
+  }
+
+  // ── 필터 적용 ─────────────────────────────────────────────────────────────
+  function applyFilter(key) {
+    const f = filterState[key];
+    let label = DEFAULT_LABELS[key];
+
+    if (key === 'ask_price') {
+      const min = +document.getElementById('ask_price_min').value || null;
+      const max = +document.getElementById('ask_price_max').value || null;
+      f.min = min; f.max = max;
+      f.active = min !== null || max !== null;
+      if (f.active) {
+        label = min && max ? `${min.toLocaleString()}~${max.toLocaleString()}만`
+               : min ? `${min.toLocaleString()}만~` : `~${max.toLocaleString()}만`;
+      }
+    } else if (key === 'household') {
+      const min = +document.getElementById('household_min').value || null;
+      f.min = min; f.active = min !== null;
+      if (f.active) label = `${min.toLocaleString()}세대↑`;
+    } else if (key === 'year_built') {
+      const min = +document.getElementById('year_built_min').value || null;
+      f.min = min; f.active = min !== null;
+      if (f.active) label = `${min}년↑`;
+    } else if (key === 'ask_rate') {
+      const val = +document.getElementById('ask_rate_slider').value;
+      f.max = val; f.active = true;
+      label = `호가회복률 ≤${val}%`;
+    } else if (key === 'trade_rate') {
+      const val = +document.getElementById('trade_rate_slider').value;
+      f.max = val; f.active = true;
+      label = `실거래회복률 ≤${val}%`;
+    } else if (key === 'floor_ratio') {
+      const min = +document.getElementById('floor_ratio_min').value || null;
+      const max = +document.getElementById('floor_ratio_max').value || null;
+      f.min = min; f.max = max;
+      f.active = min !== null || max !== null;
+      if (f.active) {
+        label = min && max ? `용적률 ${min}~${max}%`
+               : min ? `용적률 ${min}%↑` : `용적률 ${max}%↓`;
+      }
+    } else if (key === 'peak_year') {
+      const val = +document.getElementById('peak_year_input').value || 2019;
+      f.value = val; f.active = val !== 2019;
+      label = `전고점 ${val}년~`;
+    }
+
+    setChip(key, f.active, label);
+    closePanel();
+  }
+
+  // ── 필터 초기화 ───────────────────────────────────────────────────────────
+  function clearFilter(key) {
+    const f = filterState[key];
+    f.active = false;
+
+    const resets = {
+      ask_price:  () => { f.min=null; f.max=null; setVal('ask_price_min',''); setVal('ask_price_max',''); },
+      household:  () => { f.min=null; setVal('household_min',''); },
+      year_built: () => { f.min=null; setVal('year_built_min',''); },
+      ask_rate:   () => { f.max=null; setRange('ask_rate_slider',100,'ask_rate_disp','100%'); },
+      trade_rate: () => { f.max=null; setRange('trade_rate_slider',100,'trade_rate_disp','100%'); },
+      floor_ratio:() => { f.min=null; f.max=null; setVal('floor_ratio_min',''); setVal('floor_ratio_max',''); },
+      peak_year:  () => { f.value=2019; setVal('peak_year_input',2019); },
+    };
+    resets[key]?.();
+    setChip(key, false, DEFAULT_LABELS[key]);
+    closePanel();
+  }
+
+  function setVal(id, val) { document.getElementById(id).value = val; }
+  function setRange(sliderId, val, dispId, dispText) {
+    document.getElementById(sliderId).value = val;
+    document.getElementById(dispId).textContent = dispText;
+  }
+  function setChip(key, active, label) {
+    const el = document.getElementById('chip-' + key);
+    el.classList.toggle('active', active);
+    el.textContent = label;
+  }
+
+  // ── 분석 시작 ─────────────────────────────────────────────────────────────
+  function startAnalysis() {
+    if (activeAreas.size === 0) { alert('지역을 1개 이상 선택해주세요.'); return; }
+
+    closePanel();
+    document.getElementById('analyze-btn').disabled = true;
+    document.getElementById('loading').hidden = false;
+    document.getElementById('results-section').hidden = true;
+    document.getElementById('error-box').hidden = true;
+
+    // 경과 시간 타이머
+    elapsedSec = 0;
+    clearInterval(elapsedTimer);
+    elapsedTimer = setInterval(() => {
+      elapsedSec++;
+      const m = Math.floor(elapsedSec / 60);
+      const s = elapsedSec % 60;
+      document.getElementById('loading-timer').textContent =
+        `경과 ${m > 0 ? m + '분 ' : ''}${s}초`;
+    }, 1000);
+
+    const f = filterState;
+    const payload = {
+      areas: [...activeAreas],
+      area_type: areaType,
+      filters: {
+        ask_price_min:  f.ask_price.active  ? f.ask_price.min   : null,
+        ask_price_max:  f.ask_price.active  ? f.ask_price.max   : null,
+        ask_rate_max:   f.ask_rate.active   ? f.ask_rate.max    : null,
+        trade_rate_max: f.trade_rate.active ? f.trade_rate.max  : null,
+        peak_start_year: f.peak_year.value  || 2019,
+        min_household:  f.household.active  ? f.household.min   : null,
+        year_built_min: f.year_built.active ? f.year_built.min  : null,
+        floor_ratio_min: f.floor_ratio.active ? f.floor_ratio.min : null,
+        floor_ratio_max: f.floor_ratio.active ? f.floor_ratio.max : null,
+      },
+    };
+
+    fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(data => {
+      jobId = data.job_id;
+      clearInterval(pollTimer);
+      pollTimer = setInterval(pollStatus, 4000);
+    })
+    .catch(err => showError('서버 연결 실패: ' + err.message));
+  }
+
+  function pollStatus() {
+    if (!jobId) return;
+    fetch('/api/status/' + jobId)
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'done') {
+          clearInterval(pollTimer);
+          clearInterval(elapsedTimer);
+          showResults(data.result || []);
+        } else if (data.status === 'error') {
+          clearInterval(pollTimer);
+          clearInterval(elapsedTimer);
+          showError(data.error || '알 수 없는 오류가 발생했습니다.');
+        }
+      })
+      .catch(() => {});
+  }
+
+  // ── 결과 렌더링 ───────────────────────────────────────────────────────────
+  function showResults(apts) {
+    document.getElementById('loading').hidden = true;
+    document.getElementById('analyze-btn').disabled = false;
+    document.getElementById('results-section').hidden = false;
+
+    const m = Math.floor(elapsedSec / 60), s = elapsedSec % 60;
+    document.getElementById('results-meta').textContent =
+      `총 ${apts.length}개 단지 · 분석 소요 ${m > 0 ? m + '분 ' : ''}${s}초`;
+
+    const CYCLE = {
+      GREEN:  { label: '🟢 저점',  cls: 'badge-GREEN' },
+      YELLOW: { label: '🟡 회복중', cls: 'badge-YELLOW' },
+      RED:    { label: '🔴 고점',  cls: 'badge-RED' },
+    };
+
+    const tbody = document.getElementById('results-tbody');
+    tbody.innerHTML = '';
+    apts.forEach(a => {
+      const cy = CYCLE[a.cycle] || { label: a.cycle, cls: '' };
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td class="num rank">${a.rank}</td>` +
+        `<td class="name"><a href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(a.complex_name)}</a></td>` +
+        `<td>${escHtml(a.area_name)}</td>` +
+        `<td class="num">${a.price_per_pyeong.toLocaleString()}</td>` +
+        `<td class="num">${a.ask_price.toLocaleString()}</td>` +
+        `<td class="num">${a.latest_trade_price ? a.latest_trade_price.toLocaleString() : '–'}</td>` +
+        `<td class="num">${a.peak_price ? a.peak_price.toLocaleString() : '–'}</td>` +
+        `<td class="num">${a.ask_rate.toFixed(1)}%</td>` +
+        `<td class="num">${a.trade_rate.toFixed(1)}%</td>` +
+        `<td><span class="badge ${cy.cls}">${cy.label}</span></td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function showError(msg) {
+    document.getElementById('loading').hidden = true;
+    document.getElementById('analyze-btn').disabled = false;
+    const box = document.getElementById('error-box');
+    box.hidden = false;
+    box.textContent = '오류: ' + msg;
+  }
+
+  function downloadExcel() { window.location.href = '/api/download'; }
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>

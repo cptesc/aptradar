@@ -1,16 +1,42 @@
-"""텔레그램 알림 출력"""
+"""텔레그램 알림"""
+
+import os
+import requests
 
 
-async def send_message(token: str, chat_id: str, text: str) -> None:
-    """텍스트 메시지 전송"""
-    pass
+def send_message(token: str, chat_id: str, text: str) -> None:
+    requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+        timeout=10,
+    )
 
 
-async def send_report(token: str, chat_id: str, data: list[dict]) -> None:
-    """분석 결과 요약 리포트 전송"""
-    pass
+def send_report(token: str, chat_id: str, data: list[dict]) -> None:
+    if not data:
+        send_message(token, chat_id, "분석 결과가 없습니다.")
+        return
+
+    emoji = {"RED": "🔴", "YELLOW": "🟡", "GREEN": "🟢"}
+    lines = ["<b>🏠 APT Radar 분석 결과</b>", ""]
+    for apt in data[:10]:
+        e = emoji.get(apt.get("cycle", ""), "")
+        lines += [
+            f"{apt['rank']}위 <b>{apt['complex_name']}</b> ({apt.get('area_name', '')})",
+            f"  평당가 {apt['price_per_pyeong']:,}만원 | 호가 {apt['ask_price']:,}만원",
+            f"  호가회복률 {apt['ask_rate']:.1f}% {e}",
+            "",
+        ]
+    send_message(token, chat_id, "\n".join(lines))
 
 
-async def send_file(token: str, chat_id: str, filepath: str) -> None:
-    """파일(Excel 등) 전송"""
-    pass
+def send_file(token: str, chat_id: str, filepath: str) -> None:
+    filename = os.path.basename(filepath)
+    with open(filepath, "rb") as f:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendDocument",
+            data={"chat_id": chat_id},
+            files={"document": (filename, f,
+                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            timeout=60,
+        )
