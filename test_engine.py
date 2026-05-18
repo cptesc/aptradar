@@ -1,11 +1,13 @@
 import sys
 import asyncio
+from datetime import datetime
 sys.stdout.reconfigure(encoding="utf-8")
 
 from data.molit import get_trade_history, get_peak, get_latest_trade
 from crawler.naver import fetch_listings, match_complex
 from engine.calculator import calc_price_per_pyeong, calc_recovery_rate, classify_cycle
 from engine.filter import apply_filter, sort_by_rank
+from output.excel import export_to_excel
 from config import PEAK_START_YEAR, MIN_TRADE_COUNT
 
 AREA = "인천 서구"
@@ -63,12 +65,15 @@ async def main():
         apt_list.append({
             "rank": 0,
             "complex_name": complex_name,
+            "area_name": AREA,
             "area": area,
             "ask_price": ask_price,
             "ask_rate": ask_rate,
             "latest_trade_price": latest_trade_price,
+            "latest_trade_date": latest["date"] if latest else "",
             "trade_rate": trade_rate,
             "peak_price": peak_price,
+            "peak_date": peak["date"] if peak else "",
             "trade_count": trade_count,
             "price_per_pyeong": price_per_pyeong,
             "cycle": cycle,
@@ -101,6 +106,12 @@ async def main():
     filtered = apply_filter(apt_list, ask_rate_max=100.0, trade_rate_max=100.0)
     ranked_filtered = sort_by_rank(filtered)
     print_table(ranked_filtered[:5], f"필터 적용 (거래건수≥{MIN_TRADE_COUNT}, 회복률≤100%, 상위 5)")
+
+    # 6. Excel 저장
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    xlsx_path = f"apt_radar_{ts}.xlsx"
+    export_to_excel(ranked, ranked_filtered, xlsx_path)
+    print(f"\nExcel 저장 완료: {xlsx_path}")
 
 
 asyncio.run(main())
