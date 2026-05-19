@@ -186,11 +186,15 @@ def fetch_all_trades(
 
 # ── 기능 3: 단지+면적 기준 이력 조회 ─────────────────────────────────────────
 
-def get_trade_history(complex_name: str, area_type: int) -> list[dict]:
-    """단지명 + area_type(59 or 84)으로 DB에서 전체 거래 이력 반환.
+def get_trade_history(
+    complex_name: str,
+    area_type: int,
+    lawd_cds: list[str] | None = None,
+) -> list[dict]:
+    """단지명 + area_type으로 DB에서 거래 이력 반환.
 
-    area_type 59 → 전용면적 55~65㎡
-    area_type 84 → 전용면적 80~90㎡
+    lawd_cds: 지역 법정동코드 리스트 — 지정 시 해당 지역 데이터만 반환.
+              None이면 전체 지역 검색 (지역 오매칭 주의).
     """
     if area_type not in _AREA_RANGES:
         raise ValueError(f"지원하지 않는 area_type: {area_type} (59 또는 84만 허용)")
@@ -198,13 +202,24 @@ def get_trade_history(complex_name: str, area_type: int) -> list[dict]:
     area_min, area_max = _AREA_RANGES[area_type]
     conn = _get_db()
     try:
-        rows = conn.execute(
-            """SELECT complex_name, area, floor, price, year, month, day
-               FROM trades
-               WHERE complex_name = ? AND area BETWEEN ? AND ?
-               ORDER BY year, month, day""",
-            (complex_name, area_min, area_max),
-        ).fetchall()
+        if lawd_cds:
+            ph = ",".join("?" * len(lawd_cds))
+            rows = conn.execute(
+                f"""SELECT complex_name, area, floor, price, year, month, day
+                    FROM trades
+                    WHERE complex_name = ? AND area BETWEEN ? AND ?
+                      AND lawd_cd IN ({ph})
+                    ORDER BY year, month, day""",
+                (complex_name, area_min, area_max) + tuple(lawd_cds),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT complex_name, area, floor, price, year, month, day
+                   FROM trades
+                   WHERE complex_name = ? AND area BETWEEN ? AND ?
+                   ORDER BY year, month, day""",
+                (complex_name, area_min, area_max),
+            ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

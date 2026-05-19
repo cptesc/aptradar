@@ -87,7 +87,11 @@ async def _get_complex_list(ctx: BrowserContext, bbox: dict) -> list[int]:
 # ── 단지 페이지 방문 + article/list 인터셉트 ──────────────────────────────────
 
 def _filter_articles(
-    items: list[dict], complex_no: int, area_min: float, area_max: float
+    items: list[dict],
+    complex_no: int,
+    area_min: float,
+    area_max: float,
+    household_count: int = 0,
 ) -> list[dict]:
     results = []
     for item in items:
@@ -108,6 +112,7 @@ def _filter_articles(
             "floor": _parse_floor(detail.get("floorInfo", "")),
             "price": deal_price_won // 10000,
             "url": _ARTICLE_URL_TPL.format(complex_no=complex_no, article_no=article_no),
+            "household_count": household_count,
         })
     return results
 
@@ -115,7 +120,34 @@ def _filter_articles(
 async def _visit_and_capture(
     page: Page, complex_no: int, area_min: float, area_max: float
 ) -> list[dict]:
-    """단지 페이지 방문 → 브라우저가 자동 호출하는 article/list 응답 캡처"""
+    """단지 페이지 방문 → article/list + complexInfo 응답 캡처"""
+    complex_meta: dict = {}
+
+    async def on_response(resp):
+        if resp.status != 200:
+            return
+        # complexInfo URL 패턴: front-api/v1/complex/complexInfo 등
+        if "complexInfo" in resp.url or (
+            "/complex/" in resp.url
+            and "article" not in resp.url
+            and "cluster" not in resp.url
+            and "Clusters" not in resp.url
+        ):
+            try:
+                body = await resp.json()
+                result = body.get("result") or {}
+                hh = (
+                    result.get("totalHouseholdCount")
+                    or result.get("householdCount")
+                    or result.get("totalDongHouseholdCount")
+                    or 0
+                )
+                if hh:
+                    complex_meta["household_count"] = int(hh)
+            except Exception:
+                pass
+
+    page.on("response", on_response)
     try:
         async with page.expect_response(
             lambda r: "complex/article/list" in r.url and r.status == 200,
@@ -129,9 +161,17 @@ async def _visit_and_capture(
         resp = await resp_info.value
         body = await resp.json()
         items = (body.get("result") or {}).get("list") or []
-        return _filter_articles(items, complex_no, area_min, area_max)
+        # 비동기 on_response 핸들러가 완료될 시간을 줌
+        await asyncio.sleep(0.15)
+        household_count = complex_meta.get("household_count", 0)
+        return _filter_articles(items, complex_no, area_min, area_max, household_count)
     except Exception:
         return []
+    finally:
+        try:
+            page.remove_listener("response", on_response)
+        except Exception:
+            pass
 
 
 # ── 기능 1: 매물 호가 수집 ────────────────────────────────────────────────────

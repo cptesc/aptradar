@@ -24,7 +24,7 @@ except ImportError:
 
 from dotenv import load_dotenv
 
-from config import TARGET_AREAS, PEAK_START_YEAR
+from config import TARGET_AREAS, PEAK_START_YEAR, AREA_CODE_MAP
 from crawler.naver import fetch_listings, match_complex as naver_match
 from data.molit import get_trade_history, get_peak, get_latest_trade
 from engine.calculator import calc_price_per_pyeong, calc_recovery_rate, classify_cycle
@@ -79,17 +79,26 @@ async def _build_apt_list(
             if price_max is not None and ask > price_max:
                 continue
 
-            history = get_trade_history(cname, area_type)
+            lawd_cds = AREA_CODE_MAP.get(area_name, [])
+            history = get_trade_history(cname, area_type, lawd_cds=lawd_cds)
             if not history:
                 try:
                     conn = sqlite3.connect(os.path.join("db", "apt_radar.db"))
-                    db_names = [r[0] for r in conn.execute(
-                        "SELECT DISTINCT complex_name FROM trades"
-                    ).fetchall()]
+                    # fuzzy matching도 같은 지역 내 단지명으로 한정
+                    if lawd_cds:
+                        ph = ",".join("?" * len(lawd_cds))
+                        db_names = [r[0] for r in conn.execute(
+                            f"SELECT DISTINCT complex_name FROM trades WHERE lawd_cd IN ({ph})",
+                            lawd_cds,
+                        ).fetchall()]
+                    else:
+                        db_names = [r[0] for r in conn.execute(
+                            "SELECT DISTINCT complex_name FROM trades"
+                        ).fetchall()]
                     conn.close()
                     matched, _ = naver_match(cname, db_names)
                     if matched:
-                        history = get_trade_history(matched, area_type)
+                        history = get_trade_history(matched, area_type, lawd_cds=lawd_cds)
                 except Exception:
                     pass
 
@@ -115,6 +124,7 @@ async def _build_apt_list(
                 "peak_price": peak_price,
                 "peak_date": peak["date"] if peak else "",
                 "trade_count": len(history),
+                "household_count": best.get("household_count", 0),
                 "price_per_pyeong": calc_price_per_pyeong(ask, area_m2),
                 "cycle": classify_cycle(ask_rate),
                 "url": best["url"],
@@ -135,17 +145,20 @@ def _pipeline_thread(job_id: str, params: dict) -> None:
         price_max = int(filt["ask_price_max"]) if filt.get("ask_price_max") else None
         ask_rate_max = float(filt["ask_rate_max"]) if filt.get("ask_rate_max") is not None else None
         trade_rate_max = float(filt["trade_rate_max"]) if filt.get("trade_rate_max") is not None else None
+        min_household = int(filt["min_household"]) if filt.get("min_household") else None
 
         apt_list = asyncio.run(_build_apt_list(
             areas, area_type, peak_start_year, price_min, price_max
         ))
 
-        # 웹 테이블: 활성화된 회복률 필터만 적용 (MIN_TRADE_COUNT 미적용)
+        # 웹 테이블: 활성화된 필터만 적용 (MIN_TRADE_COUNT 미적용)
         web_result = apt_list[:]
         if ask_rate_max is not None:
             web_result = [a for a in web_result if a["ask_rate"] <= ask_rate_max]
         if trade_rate_max is not None:
             web_result = [a for a in web_result if a["trade_rate"] <= trade_rate_max]
+        if min_household is not None:
+            web_result = [a for a in web_result if a.get("household_count", 0) >= min_household]
         ranked = sort_by_rank(web_result)
 
         # Excel Sheet1: 전체, Sheet2: 표준 필터(MIN_TRADE_COUNT 포함)
@@ -215,6 +228,9 @@ def api_download():
     )
 
 
+_HOST = "127.0.0.1"
+_PORT = 5000
+
 if __name__ == "__main__":
-    threading.Timer(1.5, lambda: webbrowser.open("http://localhost:5000")).start()
-    app.run(debug=False, port=5000, use_reloader=False)
+    threading.Timer(1.5, lambda: webbrowser.open(f"http://{_HOST}:{_PORT}")).start()
+    app.run(host=_HOST, port=_PORT, threaded=True, use_reloader=False, debug=False)
