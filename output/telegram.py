@@ -23,8 +23,8 @@ def send_report(token: str, chat_id: str, data: list[dict]) -> None:
         e = emoji.get(apt.get("cycle", ""), "")
         lines += [
             f"{apt['rank']}위 <b>{apt['complex_name']}</b> ({apt.get('area_name', '')})",
-            f"  평당가 {apt['price_per_pyeong']:,}만원 | 호가 {apt['ask_price']:,}만원",
-            f"  호가회복률 {apt['ask_rate']:.1f}% {e}",
+            f"  평당가 {apt['price_per_pyeong']:,}만원 | 최근실거래 {apt['latest_trade_price']:,}만원",
+            f"  실거래회복률 {apt['trade_rate']:.1f}% {e}",
             "",
         ]
     send_message(token, chat_id, "\n".join(lines))

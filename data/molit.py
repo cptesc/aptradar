@@ -52,8 +52,19 @@ def _get_db() -> sqlite3.Connection:
             deal_ymd TEXT NOT NULL,
             PRIMARY KEY (lawd_cd, deal_ymd)
         );
+        CREATE TABLE IF NOT EXISTS complex_info (
+            complex_name    TEXT PRIMARY KEY,
+            household_count INTEGER DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS kapt_list (
+            kaptCode TEXT PRIMARY KEY,
+            kaptName TEXT,
+            bjdCode  TEXT
+        );
         CREATE INDEX IF NOT EXISTS idx_trades_complex
             ON trades (complex_name, area);
+        CREATE INDEX IF NOT EXISTS idx_kapt_bjd
+            ON kapt_list (bjdCode);
     """)
     return conn
 
@@ -227,13 +238,13 @@ def get_trade_history(
 
 # ── 기능 4: 전고점 계산 ───────────────────────────────────────────────────────
 
-def get_peak(trade_history: list[dict], start_year: int) -> dict | None:
-    """start_year 이후 최고 거래금액과 거래일 반환.
+def get_peak(trade_history: list[dict], end_year: int) -> dict | None:
+    """end_year 이전(포함) 최고 거래금액과 거래일 반환.
 
     Returns:
         {"price": int, "date": "YYYY-MM-DD"} 또는 None (데이터 없음)
     """
-    filtered = [t for t in trade_history if t["year"] >= start_year]
+    filtered = [t for t in trade_history if t["year"] <= end_year]
     if not filtered:
         return None
     peak = max(filtered, key=lambda t: t["price"])
@@ -243,7 +254,34 @@ def get_peak(trade_history: list[dict], start_year: int) -> dict | None:
     }
 
 
-# ── 기능 5: 최근 실거래가 조회 ────────────────────────────────────────────────
+# ── 기능 5: 지역+면적 단지 목록 조회 ─────────────────────────────────────────
+
+def get_complexes_by_area(area_type: int, lawd_cds: list[str]) -> list[str]:
+    """해당 지역·면적 거래 이력이 있는 단지명 목록 반환 (MOLIT DB 기준)"""
+    if area_type not in _AREA_RANGES:
+        raise ValueError(f"지원하지 않는 area_type: {area_type}")
+    area_min, area_max = _AREA_RANGES[area_type]
+    conn = _get_db()
+    try:
+        if lawd_cds:
+            ph = ",".join("?" * len(lawd_cds))
+            rows = conn.execute(
+                f"""SELECT DISTINCT complex_name FROM trades
+                    WHERE area BETWEEN ? AND ? AND lawd_cd IN ({ph})""",
+                (area_min, area_max) + tuple(lawd_cds),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT DISTINCT complex_name FROM trades
+                   WHERE area BETWEEN ? AND ?""",
+                (area_min, area_max),
+            ).fetchall()
+        return [r[0] for r in rows if r[0]]
+    finally:
+        conn.close()
+
+
+# ── 기능 6: 최근 실거래가 조회 ────────────────────────────────────────────────
 
 def get_latest_trade(trade_history: list[dict]) -> dict | None:
     """가장 최근 거래금액과 거래일 반환.
@@ -261,3 +299,33 @@ def get_latest_trade(trade_history: list[dict]) -> dict | None:
         "price": latest["price"],
         "date": f"{latest['year']}-{latest['month']:02d}-{latest['day']:02d}",
     }
+
+
+# ── 기능 7: 세대수 조회 / 저장 ───────────────────────────────────────────────────
+
+def get_household_count(complex_name: str) -> int:
+    """단지명으로 저장된 세대수 반환 (없으면 0)"""
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT household_count FROM complex_info WHERE complex_name=?",
+            (complex_name,),
+        ).fetchone()
+        return int(row[0]) if row else 0
+    finally:
+        conn.close()
+
+
+def upsert_household_counts(name_count: dict) -> None:
+    """단지명 → 세대수 매핑을 DB에 저장 (이미 있으면 갱신)"""
+    if not name_count:
+        return
+    conn = _get_db()
+    try:
+        conn.executemany(
+            "INSERT OR REPLACE INTO complex_info (complex_name, household_count) VALUES (?, ?)",
+            name_count.items(),
+        )
+        conn.commit()
+    finally:
+        conn.close()
