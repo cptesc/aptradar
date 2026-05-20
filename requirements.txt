@@ -1,7 +1,5 @@
-python-telegram-bot>=20.0
-playwright
+flask
 requests
 openpyxl
 thefuzz
 python-dotenv
-aiohttp
