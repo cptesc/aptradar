@@ -169,6 +169,24 @@ def api_status(job_id: str):
     return jsonify(job)
 
 
+@app.route("/api/send_telegram_message", methods=["POST"])
+def api_send_telegram_message():
+    tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    tg_chat = os.getenv("TELEGRAM_CHAT_ID", "")
+    if not tg_token or not tg_chat:
+        return jsonify({"error": "텔레그램 설정 없음 (.env에 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 필요)"}), 400
+    if not _latest_data:
+        return jsonify({"error": "분석 결과 없음"}), 400
+
+    ranked = sort_by_rank(_latest_data["apt_list"])
+    try:
+        tg_send_report(tg_token, tg_chat, ranked[:10])
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    return jsonify({"ok": True})
+
+
 @app.route("/api/send_telegram", methods=["POST"])
 def api_send_telegram():
     tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")

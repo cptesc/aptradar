@@ -536,8 +536,11 @@
           <button class="btn-download" onclick="downloadExcel()">
             <span>📥</span> 엑셀 다운로드
           </button>
+          <button class="btn-telegram" id="btn-telegram-msg" onclick="sendTelegramMessage()">
+            <span>💬</span> 메시지 전송
+          </button>
           <button class="btn-telegram" id="btn-telegram" onclick="sendTelegram()">
-            <span>✈️</span> 텔레그램 전송
+            <span>✈️</span> 텔레그램+엑셀
           </button>
         </div>
       </div>
@@ -860,6 +863,29 @@
   }
 
   function downloadExcel() { window.location.href = '/api/download'; }
+
+  function sendTelegramMessage() {
+    const btn = document.getElementById('btn-telegram-msg');
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> 전송 중...';
+    fetch('/api/send_telegram_message', { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          btn.innerHTML = '<span>✅</span> 전송 완료';
+          setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span>💬</span> 메시지 전송'; }, 3000);
+        } else {
+          alert('전송 실패: ' + (data.error || '알 수 없는 오류'));
+          btn.disabled = false;
+          btn.innerHTML = '<span>💬</span> 메시지 전송';
+        }
+      })
+      .catch(err => {
+        alert('서버 오류: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<span>💬</span> 메시지 전송';
+      });
+  }
 
   function sendTelegram() {
     const btn = document.getElementById('btn-telegram');
