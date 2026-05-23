@@ -289,20 +289,23 @@ def get_complexes_by_area(area_type: int, lawd_cds: list[str]) -> list[str]:
 # ── 기능 6: 최근 실거래가 조회 ────────────────────────────────────────────────
 
 def get_latest_trade(trade_history: list[dict]) -> dict | None:
-    """가장 최근 거래금액과 거래일 반환.
+    """가장 최근 월의 최고 거래금액과 거래일 반환.
+
+    같은 월 내 이상치(급매·친족 간 거래 등) 방지를 위해
+    가장 최근 월의 거래 중 최고가를 사용한다.
 
     Returns:
         {"price": int, "date": "YYYY-MM-DD"} 또는 None (데이터 없음)
     """
     if not trade_history:
         return None
-    latest = max(
-        trade_history,
-        key=lambda t: (t["year"], t["month"], t["day"]),
-    )
+    latest = max(trade_history, key=lambda t: (t["year"], t["month"], t["day"]))
+    latest_ym = (latest["year"], latest["month"])
+    same_month = [t for t in trade_history if (t["year"], t["month"]) == latest_ym]
+    best = max(same_month, key=lambda t: t["price"])
     return {
-        "price": latest["price"],
-        "date": f"{latest['year']}-{latest['month']:02d}-{latest['day']:02d}",
+        "price": best["price"],
+        "date": f"{best['year']}-{best['month']:02d}-{best['day']:02d}",
     }
 
 
