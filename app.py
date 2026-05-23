@@ -81,7 +81,7 @@ def _build_apt_list(
             latest_price = latest["price"] if latest else 0
             area_m2 = history[-1]["area"]
 
-            trade_rate = calc_recovery_rate(latest_price, peak_price) if peak_price else 0.0
+            trade_rate = calc_recovery_rate(latest_price, peak_price) if peak_price else None
 
             apt_list.append({
                 "rank": 0,
@@ -96,7 +96,7 @@ def _build_apt_list(
                 "trade_count": len(history),
                 "household_count": get_household_count(cname),
                 "price_per_pyeong": calc_price_per_pyeong(latest_price, area_m2) if latest_price else 0,
-                "cycle": classify_cycle(trade_rate),
+                "cycle": classify_cycle(trade_rate) if trade_rate is not None else "NONE",
                 "url": (
                     f"https://fin.land.naver.com/complexes/{no}"
                     if (no := get_naver_complex_no(cname))
@@ -151,7 +151,7 @@ def _pipeline_thread(job_id: str, params: dict) -> None:
         # 웹 테이블: 활성화된 필터만 적용 (MIN_TRADE_COUNT 미적용)
         web_result = apt_list[:]
         if trade_rate_max is not None:
-            web_result = [a for a in web_result if a["trade_rate"] <= trade_rate_max]
+            web_result = [a for a in web_result if a["trade_rate"] is not None and a["trade_rate"] <= trade_rate_max]
         if household_count_min > 0:
             web_result = [a for a in web_result if a["household_count"] == 0 or a["household_count"] >= household_count_min]
         if latest_price_min is not None:
@@ -231,9 +231,10 @@ def api_send_telegram_message():
     if not _latest_data:
         return jsonify({"error": "분석 결과 없음"}), 400
 
-    ranked = sort_by_rank(_latest_data["apt_list"])
+    sort_key = (request.json or {}).get("sort_by", "trade_rate")
+    ranked = sort_by_rank(_latest_data["apt_list"], sort_key)
     try:
-        tg_send_report(tg_token, tg_chat, ranked[:10])
+        tg_send_report(tg_token, tg_chat, ranked[:20])
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -251,7 +252,8 @@ def api_send_telegram():
 
     apt_list = _latest_data["apt_list"]
     trade_rate_max = _latest_data["trade_rate_max"]
-    ranked = sort_by_rank(apt_list)
+    sort_key = (request.json or {}).get("sort_by", "trade_rate")
+    ranked = sort_by_rank(apt_list, sort_key)
 
     excel_all = sort_by_rank(apt_list)
     excel_filtered = sort_by_rank(apply_filter(
@@ -263,7 +265,7 @@ def api_send_telegram():
     export_to_excel(excel_all, excel_filtered, xlsx_path)
 
     try:
-        tg_send_report(tg_token, tg_chat, ranked[:10])
+        tg_send_report(tg_token, tg_chat, ranked[:20])
         tg_send_file(tg_token, tg_chat, xlsx_path)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

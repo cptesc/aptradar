@@ -870,6 +870,7 @@
       GREEN:  { label: '🟢 저점',  cls: 'badge-GREEN' },
       YELLOW: { label: '🟡 회복중', cls: 'badge-YELLOW' },
       RED:    { label: '🔴 고점',  cls: 'badge-RED' },
+      NONE:   { label: '–',        cls: '' },
     };
 
     const tbody = document.getElementById('results-tbody');
@@ -888,7 +889,7 @@
         `<td class="num">${a.price_per_pyeong > 0 ? a.price_per_pyeong.toLocaleString() : '–'}</td>` +
         `<td class="num">${a.latest_trade_price > 0 ? a.latest_trade_price.toLocaleString() : '–'}</td>` +
         `<td class="num">${a.peak_price > 0 ? a.peak_price.toLocaleString() + (a.peak_date ? ' <span style="color:var(--muted);font-size:0.75rem;font-weight:400">(' + a.peak_date.slice(0,7).replace('-','.') + ')</span>' : '') : '–'}</td>` +
-        `<td class="num">${a.trade_rate.toFixed(1)}%</td>` +
+        `<td class="num">${a.trade_rate !== null && a.trade_rate !== undefined ? a.trade_rate.toFixed(1) + '%' : '–'}</td>` +
         `<td><span class="badge ${cy.cls}">${cy.label}</span></td>`;
       tbody.appendChild(tr);
     });
@@ -908,7 +909,7 @@
     const btn = document.getElementById('btn-telegram-msg');
     btn.disabled = true;
     btn.innerHTML = '<span>⏳</span> 전송 중...';
-    fetch('/api/send_telegram_message', { method: 'POST' })
+    fetch('/api/send_telegram_message', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sort_by: currentSort}) })
       .then(r => r.json())
       .then(data => {
         if (data.ok) {
@@ -931,7 +932,7 @@
     const btn = document.getElementById('btn-telegram');
     btn.disabled = true;
     btn.innerHTML = '<span>⏳</span> 전송 중...';
-    fetch('/api/send_telegram', { method: 'POST' })
+    fetch('/api/send_telegram', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sort_by: currentSort}) })
       .then(r => r.json())
       .then(data => {
         if (data.ok) {

@@ -20,9 +20,23 @@ def apply_filter(
     ]
 
 
-def sort_by_rank(apt_list: list[dict]) -> list[dict]:
-    """실거래 회복률 오름차순 정렬 (저점 단지가 1위)"""
-    ranked = sorted(apt_list, key=lambda x: x.get("trade_rate", 999))
+def sort_by_rank(apt_list: list[dict], sort_key: str = "trade_rate") -> list[dict]:
+    """sort_key 기준으로 정렬 후 rank 부여.
+
+    sort_key: "trade_rate"(회복률↑), "ppp_asc"(평당가↑), "ppp_desc"(평당가↓)
+    trade_rate=None인 단지는 항상 맨 뒤로.
+    """
+    if sort_key == "ppp_asc":
+        key_fn = lambda x: x.get("price_per_pyeong") or 0
+        reverse = False
+    elif sort_key == "ppp_desc":
+        key_fn = lambda x: x.get("price_per_pyeong") or 0
+        reverse = True
+    else:
+        key_fn = lambda x: x.get("trade_rate") if x.get("trade_rate") is not None else 9999
+        reverse = False
+
+    ranked = sorted(apt_list, key=key_fn, reverse=reverse)
     for i, apt in enumerate(ranked, 1):
         apt["rank"] = i
     return ranked
