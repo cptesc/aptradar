@@ -15,8 +15,8 @@ load_dotenv()
 
 _LIST_URL = "https://apis.data.go.kr/1613000/AptListService3/getTotalAptList3"
 _BASS_URL = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4"
-_MATCH_THRESHOLD = 80
-_MATCH_LEN_RATIO = 0.4
+_MATCH_THRESHOLD = 70
+_MATCH_LEN_RATIO = 0.3
 
 
 # ── 전체 단지 목록 캐시 ────────────────────────────────────────────────────────
@@ -84,9 +84,19 @@ def _get_kapt_for_lawd(lawd_cd: str) -> list[dict]:
 
 # ── fuzzy 매칭 ────────────────────────────────────────────────────────────────
 
+_NOISE = re.compile(r"아파트|공동주택|주공|임대|분양|뉴타운|신도시|한신|아이에스|IS$", re.I)
+_NUM_NORM = [
+    (re.compile(r"제(\d+)"), r"\1"),      # 제1단지 → 1단지
+    (re.compile(r"(\d+)bl\b", re.I), r"\1블록"),  # 1BL → 1블록
+    (re.compile(r"(\d+)b\b", re.I), r"\1블록"),
+]
+
 def _normalize(name: str) -> str:
-    name = re.sub(r"\([^)]*\)|\[[^\]]*\]", "", name)
+    name = re.sub(r"\([^)]*\)|\[[^\]]*\]", "", name)  # 괄호 제거
     name = re.sub(r"[^\w\s]", "", name)
+    for pat, repl in _NUM_NORM:
+        name = pat.sub(repl, name)
+    name = _NOISE.sub("", name)
     return re.sub(r"\s+", " ", name).strip()
 
 
@@ -145,21 +155,32 @@ def sync_household_counts(area_name: str, area_type: int) -> int:
     if not kapt_list:
         return 0
 
-    # K-apt 이름 → MOLIT 이름 fuzzy 매칭
+    # 방향1: K-apt → MOLIT fuzzy 매칭
     matched: dict[str, str] = {}  # molit_name → kaptCode
+    kapt_name_to_code: dict[str, str] = {}
     for row in kapt_list:
         kapt_name = str(row.get("kaptName") or "").strip()
         kapt_code = str(row.get("kaptCode") or "").strip()
         if not kapt_name or not kapt_code:
             continue
+        kapt_name_to_code[kapt_name] = kapt_code
         molit_name = _fuzzy_match(kapt_name, molit_names)
         if molit_name and molit_name not in matched:
             matched[molit_name] = kapt_code
 
+    # 방향2: 매칭 안 된 MOLIT 이름 → K-apt (역방향)
+    unmatched_molit = [n for n in molit_names if n not in matched]
+    if unmatched_molit and kapt_name_to_code:
+        kapt_names = list(kapt_name_to_code.keys())
+        for molit_name in unmatched_molit:
+            kapt_name = _fuzzy_match(molit_name, kapt_names)
+            if kapt_name and molit_name not in matched:
+                matched[molit_name] = kapt_name_to_code[kapt_name]
+
     if not matched:
         return 0
 
-    # 이미 DB에 세대수가 있는 단지는 스킵
+    # 이미 세대수가 저장된 단지는 스킵, 미매칭(0)은 재시도
     from data.molit import get_household_count
     new_matched = {
         name: code for name, code in matched.items()
