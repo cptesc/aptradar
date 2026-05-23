@@ -96,6 +96,8 @@ def _pipeline_thread(job_id: str, params: dict) -> None:
         peak_end_year = int(filt.get("peak_end_year") or datetime.now().year)
         trade_rate_max = float(filt["trade_rate_max"]) if filt.get("trade_rate_max") is not None else None
         household_count_min = int(filt.get("household_count_min") or 0)
+        latest_price_min = int(filt["latest_price_min"]) if filt.get("latest_price_min") is not None else None
+        latest_price_max = int(filt["latest_price_max"]) if filt.get("latest_price_max") is not None else None
 
         # DB에 없는 지역·기간 자동 수집 (이미 수집된 건 스킵)
         start_ym = f"{PEAK_START_YEAR}01"
@@ -120,6 +122,10 @@ def _pipeline_thread(job_id: str, params: dict) -> None:
             web_result = [a for a in web_result if a["trade_rate"] <= trade_rate_max]
         if household_count_min > 0:
             web_result = [a for a in web_result if a["household_count"] == 0 or a["household_count"] >= household_count_min]
+        if latest_price_min is not None:
+            web_result = [a for a in web_result if a["latest_trade_price"] >= latest_price_min]
+        if latest_price_max is not None:
+            web_result = [a for a in web_result if a["latest_trade_price"] <= latest_price_max]
         ranked = sort_by_rank(web_result)
 
         _latest_data = {"apt_list": apt_list, "trade_rate_max": trade_rate_max}

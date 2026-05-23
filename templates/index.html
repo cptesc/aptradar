@@ -440,6 +440,7 @@
       <button class="chip" id="chip-floor_ratio" onclick="togglePanel('floor_ratio')">용적률</button>
       <button class="chip" id="chip-peak_year" onclick="togglePanel('peak_year')">전고점 기준연도</button>
       <button class="chip" id="chip-household_count" onclick="togglePanel('household_count')">세대수</button>
+      <button class="chip" id="chip-latest_price" onclick="togglePanel('latest_price')">최근실거래가</button>
     </div>
 
     <div class="panel-container" id="panel-container" hidden>
@@ -492,6 +493,20 @@
         <div class="panel-actions">
           <button class="btn-ghost" onclick="clearFilter('peak_year')">초기화</button>
           <button class="btn-primary" onclick="applyFilter('peak_year')">적용</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-latest_price" hidden>
+        <div class="panel-title">최근실거래가</div>
+        <div class="panel-row">
+          <input type="number" id="latest_price_min" placeholder="최소" min="0" step="1000">
+          <span class="panel-sep">~</span>
+          <input type="number" id="latest_price_max" placeholder="최대" min="0" step="1000">
+          <span class="panel-unit">만원</span>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-ghost" onclick="clearFilter('latest_price')">초기화</button>
+          <button class="btn-primary" onclick="applyFilter('latest_price')">적용</button>
         </div>
       </div>
 
@@ -596,6 +611,7 @@
     floor_ratio:     { active: false, min: null, max: null },
     peak_year:       { active: false, value: 2025 },
     household_count: { active: false, min: null },
+    latest_price:    { active: false, min: null, max: null },
   };
 
   const DEFAULT_LABELS = {
@@ -604,6 +620,7 @@
     floor_ratio:     '용적률',
     peak_year:       '전고점 기준연도',
     household_count: '세대수',
+    latest_price:    '최근실거래가',
   };
 
   // ── 지역 토글 ─────────────────────────────────────────────────────────────
@@ -689,6 +706,15 @@
       const min = +document.getElementById('household_count_min').value || null;
       f.min = min; f.active = min !== null;
       if (f.active) label = `${min.toLocaleString()}세대↑`;
+    } else if (key === 'latest_price') {
+      const min = +document.getElementById('latest_price_min').value || null;
+      const max = +document.getElementById('latest_price_max').value || null;
+      f.min = min; f.max = max;
+      f.active = min !== null || max !== null;
+      if (f.active) {
+        label = min && max ? `${min.toLocaleString()}~${max.toLocaleString()}만`
+               : min ? `${min.toLocaleString()}만↑` : `${max.toLocaleString()}만↓`;
+      }
     }
 
     setChip(key, f.active, label);
@@ -706,6 +732,7 @@
       floor_ratio:     () => { f.min=null; f.max=null; setVal('floor_ratio_min',''); setVal('floor_ratio_max',''); },
       peak_year:       () => { f.value=2025; setVal('peak_year_input',2025); },
       household_count: () => { f.min=null; setVal('household_count_min',''); },
+      latest_price:    () => { f.min=null; f.max=null; setVal('latest_price_min',''); setVal('latest_price_max',''); },
     };
     resets[key]?.();
     setChip(key, false, DEFAULT_LABELS[key]);
@@ -774,6 +801,8 @@
         floor_ratio_min: f.floor_ratio.active ? f.floor_ratio.min : null,
         floor_ratio_max: f.floor_ratio.active ? f.floor_ratio.max : null,
         household_count_min: f.household_count.active ? f.household_count.min : null,
+        latest_price_min: f.latest_price.active ? f.latest_price.min : null,
+        latest_price_max: f.latest_price.active ? f.latest_price.max : null,
       },
     };
 
