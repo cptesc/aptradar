@@ -18,7 +18,7 @@ except ImportError:
 from dotenv import load_dotenv
 
 from config import TARGET_AREAS, PEAK_START_YEAR, AREA_CODE_MAP, AREA_GROUPS
-from data.molit import get_trade_history, get_peak, get_latest_trade, get_complexes_by_area, fetch_all_trades, get_household_count
+from data.molit import get_trade_history, get_peak, get_latest_trade, get_complexes_by_area, fetch_all_trades, get_household_count, get_metadata, set_metadata, invalidate_current_month
 from data.kapt import sync_household_counts
 from engine.calculator import calc_price_per_pyeong, calc_recovery_rate, classify_cycle
 from engine.filter import apply_filter, sort_by_rank
@@ -34,6 +34,23 @@ app = Flask(__name__)
 
 _jobs: dict[str, dict] = {}
 _latest_data: dict = {}  # stores apt_list + trade_rate_max for on-demand Excel
+_update_status: dict = {"status": "idle"}
+
+
+# ── DB 업데이트 ───────────────────────────────────────────────────────────────
+
+def _update_thread() -> None:
+    global _update_status
+    try:
+        areas = list(TARGET_AREAS)
+        ym = datetime.now().strftime("%Y%m")
+        invalidate_current_month(areas)
+        fetch_all_trades(areas, ym, ym)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        set_metadata("last_updated", ts)
+        _update_status = {"status": "done", "last_updated": ts}
+    except Exception as exc:
+        _update_status = {"status": "error", "error": str(exc)}
 
 
 # ── 파이프라인 ────────────────────────────────────────────────────────────────
@@ -173,6 +190,21 @@ def api_status(job_id: str):
     if not job:
         return jsonify({"error": "not found"}), 404
     return jsonify(job)
+
+
+@app.route("/api/update", methods=["POST"])
+def api_update():
+    if _update_status.get("status") == "running":
+        return jsonify({"error": "이미 업데이트 중입니다"}), 400
+    _update_status["status"] = "running"
+    threading.Thread(target=_update_thread, daemon=True).start()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/last_updated")
+def api_last_updated():
+    ts = get_metadata("last_updated")
+    return jsonify({"last_updated": ts, "status": _update_status.get("status", "idle")})
 
 
 @app.route("/api/send_telegram_message", methods=["POST"])

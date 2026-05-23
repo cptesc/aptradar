@@ -3,6 +3,7 @@
 import os
 import sqlite3
 import time
+from datetime import datetime
 
 import requests
 from dotenv import load_dotenv
@@ -65,6 +66,10 @@ def _get_db() -> sqlite3.Connection:
             ON trades (complex_name, area);
         CREATE INDEX IF NOT EXISTS idx_kapt_bjd
             ON kapt_list (bjdCode);
+        CREATE TABLE IF NOT EXISTS metadata (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        );
     """)
     return conn
 
@@ -326,6 +331,40 @@ def upsert_household_counts(name_count: dict) -> None:
             "INSERT OR REPLACE INTO complex_info (complex_name, household_count) VALUES (?, ?)",
             name_count.items(),
         )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_metadata(key: str) -> str | None:
+    conn = _get_db()
+    try:
+        row = conn.execute("SELECT value FROM metadata WHERE key=?", (key,)).fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def set_metadata(key: str, value: str) -> None:
+    conn = _get_db()
+    try:
+        conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)", (key, value))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def invalidate_current_month(area_list: list[str]) -> None:
+    """현재 월의 fetched_months 캐시 삭제 → 다음 수집 시 재조회"""
+    ym = datetime.now().strftime("%Y%m")
+    conn = _get_db()
+    try:
+        for area in area_list:
+            for lawd_cd in AREA_CODE_MAP.get(area, []):
+                conn.execute(
+                    "DELETE FROM fetched_months WHERE lawd_cd=? AND deal_ymd=?",
+                    (lawd_cd, ym),
+                )
         conn.commit()
     finally:
         conn.close()

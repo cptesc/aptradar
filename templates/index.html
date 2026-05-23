@@ -525,6 +525,17 @@
     </div>
   </div>
 
+  <!-- DB 업데이트 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <span id="last-updated-label" style="font-size:0.8125rem;color:var(--muted);">마지막 업데이트: 불러오는 중...</span>
+    <button id="btn-update" onclick="runUpdate()"
+      style="padding:6px 16px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);font-size:0.8125rem;font-weight:600;cursor:pointer;color:var(--muted);transition:all 0.13s;"
+      onmouseover="this.style.borderColor='#94a3b8';this.style.color='var(--text)'"
+      onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+      🔄 이번달 DB 업데이트
+    </button>
+  </div>
+
   <!-- 분석 시작 -->
   <button class="analyze-btn" id="analyze-btn" onclick="startAnalysis()">분석 시작</button>
 
@@ -938,6 +949,62 @@
         btn.innerHTML = '<span>✈️</span> 텔레그램 전송';
       });
   }
+
+  // ── DB 업데이트 ───────────────────────────────────────────────────────────
+  function loadLastUpdated() {
+    fetch('/api/last_updated')
+      .then(r => r.json())
+      .then(data => {
+        const label = document.getElementById('last-updated-label');
+        label.textContent = data.last_updated
+          ? `마지막 업데이트: ${data.last_updated}`
+          : '마지막 업데이트: 없음 (업데이트 버튼을 눌러주세요)';
+      })
+      .catch(() => {});
+  }
+
+  function runUpdate() {
+    const btn = document.getElementById('btn-update');
+    btn.disabled = true;
+    btn.textContent = '⏳ 업데이트 중...';
+    document.getElementById('last-updated-label').textContent = '업데이트 중...';
+
+    fetch('/api/update', { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          alert(data.error);
+          btn.disabled = false;
+          btn.textContent = '🔄 이번달 DB 업데이트';
+          return;
+        }
+        const poll = setInterval(() => {
+          fetch('/api/last_updated')
+            .then(r => r.json())
+            .then(d => {
+              if (d.status === 'done') {
+                clearInterval(poll);
+                btn.disabled = false;
+                btn.textContent = '🔄 이번달 DB 업데이트';
+                document.getElementById('last-updated-label').textContent =
+                  `마지막 업데이트: ${d.last_updated}`;
+              } else if (d.status === 'error') {
+                clearInterval(poll);
+                btn.disabled = false;
+                btn.textContent = '🔄 이번달 DB 업데이트';
+                alert('업데이트 실패');
+              }
+            });
+        }, 3000);
+      })
+      .catch(err => {
+        alert('오류: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '🔄 이번달 DB 업데이트';
+      });
+  }
+
+  loadLastUpdated();
 
   function escHtml(s) {
     return String(s)
