@@ -18,7 +18,7 @@ except ImportError:
 from dotenv import load_dotenv
 
 from config import TARGET_AREAS, PEAK_START_YEAR, AREA_CODE_MAP, AREA_GROUPS
-from data.molit import get_trade_history, get_peak, get_latest_trade, get_complexes_by_area, fetch_all_trades, get_household_count, get_metadata, set_metadata, invalidate_current_month
+from data.molit import get_trade_history, get_peak, get_latest_trade, get_complexes_by_area, fetch_all_trades, get_household_count, get_metadata, set_metadata, invalidate_current_month, get_naver_complex_no
 from data.kapt import sync_household_counts
 from engine.calculator import calc_price_per_pyeong, calc_recovery_rate, classify_cycle
 from engine.filter import apply_filter, sort_by_rank
@@ -97,7 +97,11 @@ def _build_apt_list(
                 "household_count": get_household_count(cname),
                 "price_per_pyeong": calc_price_per_pyeong(latest_price, area_m2) if latest_price else 0,
                 "cycle": classify_cycle(trade_rate),
-                "url": f"https://fin.land.naver.com/map?searchKeyword={urlquote(cname)}",
+                "url": (
+                    f"https://fin.land.naver.com/complexes/{no}"
+                    if (no := get_naver_complex_no(cname))
+                    else f"https://fin.land.naver.com/map?searchKeyword={urlquote(cname)}"
+                ),
             })
 
     return apt_list
@@ -130,6 +134,17 @@ def _pipeline_thread(job_id: str, params: dict) -> None:
                 sync_household_counts(area_name, area_type)
             except Exception:
                 pass
+
+        # Naver complex_no 동기화 (세대수 기반 1:1 매핑, playwright 필요)
+        try:
+            from crawler.naver import sync_naver_complex_nos
+            for area_name in areas:
+                try:
+                    sync_naver_complex_nos(area_name, area_type)
+                except Exception:
+                    pass
+        except ImportError:
+            pass
 
         apt_list = _build_apt_list(areas, area_type, peak_end_year)
 

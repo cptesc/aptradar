@@ -70,6 +70,10 @@ def _get_db() -> sqlite3.Connection:
             key   TEXT PRIMARY KEY,
             value TEXT
         );
+        CREATE TABLE IF NOT EXISTS naver_complex (
+            complex_name TEXT PRIMARY KEY,
+            complex_no   INTEGER NOT NULL
+        );
     """)
     return conn
 
@@ -333,6 +337,31 @@ def upsert_household_counts(name_count: dict) -> None:
         conn.executemany(
             "INSERT OR REPLACE INTO complex_info (complex_name, household_count) VALUES (?, ?)",
             name_count.items(),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_naver_complex_no(complex_name: str) -> int | None:
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT complex_no FROM naver_complex WHERE complex_name=?", (complex_name,)
+        ).fetchone()
+        return int(row[0]) if row else None
+    finally:
+        conn.close()
+
+
+def upsert_naver_complexes(name_no: dict[str, int]) -> None:
+    if not name_no:
+        return
+    conn = _get_db()
+    try:
+        conn.executemany(
+            "INSERT OR REPLACE INTO naver_complex (complex_name, complex_no) VALUES (?, ?)",
+            name_no.items(),
         )
         conn.commit()
     finally:

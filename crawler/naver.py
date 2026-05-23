@@ -14,7 +14,7 @@ import re
 from playwright.async_api import async_playwright, BrowserContext, Page
 from thefuzz import process as fuzz_process
 
-from data.molit import upsert_household_counts
+from data.molit import upsert_household_counts, upsert_naver_complexes, get_naver_complex_no
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -261,7 +261,94 @@ async def fetch_listings(area_name: str, area_type: int, limit: int | None = Non
     return results
 
 
-# ── 기능 2: 단지명 정제 ───────────────────────────────────────────────────────
+# ── 기능 2: Naver complex_no ↔ MOLIT 단지명 동기화 ───────────────────────────
+
+async def _fetch_clusters_async(area_name: str) -> list[dict]:
+    """Playwright로 complexClusters API 호출 → [{complex_no, household_count}, ...]"""
+    bbox = _AREA_BBOX.get(area_name)
+    if not bbox:
+        return []
+    strict = _AREA_STRICT_BBOX.get(area_name, bbox)
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(
+            headless=True, args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]
+        )
+        ctx = await browser.new_context(
+            user_agent=_USER_AGENT, locale="ko-KR", timezone_id="Asia/Seoul",
+            extra_http_headers={"Accept-Language": "ko-KR,ko;q=0.9"},
+        )
+        await ctx.add_init_script(
+            "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
+        )
+        try:
+            page = await ctx.new_page()
+            await page.goto(f"{_BASE}/", wait_until="load", timeout=30000)
+            await asyncio.sleep(0.5)
+            all_clusters = await _get_complex_list(ctx, bbox)
+        finally:
+            await browser.close()
+
+    return [
+        c for c in all_clusters
+        if c["lon"] and c["lat"]
+        and strict["left"] <= c["lon"] <= strict["right"]
+        and strict["bottom"] <= c["lat"] <= strict["top"]
+    ]
+
+
+def sync_naver_complex_nos(area_name: str, area_type: int) -> int:
+    """Naver 세대수 ↔ K-apt 세대수 1:1 매핑으로 complex_no를 DB에 저장.
+
+    같은 지역 내 세대수가 고유한 단지만 매핑 (오매칭 방지).
+    Returns: 새로 저장된 단지 수.
+    """
+    from config import AREA_CODE_MAP
+    from data.molit import get_complexes_by_area, get_household_count
+
+    if area_name not in _AREA_BBOX:
+        return 0
+
+    lawd_cds = AREA_CODE_MAP.get(area_name, [])
+    molit_names = get_complexes_by_area(area_type, lawd_cds)
+
+    # 이미 complex_no가 저장된 단지 제외
+    need_mapping = {
+        name: get_household_count(name)
+        for name in molit_names
+        if get_household_count(name) > 0 and get_naver_complex_no(name) is None
+    }
+    if not need_mapping:
+        return 0
+
+    try:
+        clusters = asyncio.run(_fetch_clusters_async(area_name))
+    except Exception as e:
+        print(f"[Naver 동기화 실패] {area_name}: {e}")
+        return 0
+
+    # 세대수 → [complex_no] 역매핑
+    hh_to_nos: dict[int, list[int]] = {}
+    for c in clusters:
+        hh = c["household_count"]
+        if hh > 0:
+            hh_to_nos.setdefault(hh, []).append(c["complex_no"])
+
+    # 세대수가 지역 내에서 고유한 단지만 매핑
+    name_no: dict[str, int] = {}
+    for name, hh in need_mapping.items():
+        nos = hh_to_nos.get(hh, [])
+        if len(nos) == 1:
+            name_no[name] = nos[0]
+
+    if name_no:
+        upsert_naver_complexes(name_no)
+        print(f"  [Naver] {area_name}: {len(name_no)}개 단지 complex_no 저장")
+
+    return len(name_no)
+
+
+# ── 기능 3: 단지명 정제 ───────────────────────────────────────────────────────
 
 def normalize_name(name: str) -> str:
     """괄호·특수문자 제거, 공백 정규화"""
