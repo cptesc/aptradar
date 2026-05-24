@@ -644,6 +644,7 @@
     document.querySelectorAll('.area-tag').forEach(el => {
       el.classList.toggle('active', activeAreas.has(el.dataset.area));
     });
+    saveToStorage();
   }
 
   function toggleGroup(groupName) {
@@ -659,6 +660,7 @@
     document.querySelectorAll('.area-tag').forEach(el => {
       el.classList.toggle('active', activeAreas.has(el.dataset.area));
     });
+    saveToStorage();
   }
 
   // ── 면적 타입 ─────────────────────────────────────────────────────────────
@@ -666,6 +668,7 @@
     areaType = type;
     document.getElementById('chip-84').classList.toggle('active', type === 84);
     document.getElementById('chip-59').classList.toggle('active', type === 59);
+    saveToStorage();
   }
 
   // ── 패널 토글 ─────────────────────────────────────────────────────────────
@@ -729,6 +732,7 @@
     }
 
     setChip(key, f.active, label);
+    saveToStorage();
     closePanel();
   }
 
@@ -747,6 +751,7 @@
     };
     resets[key]?.();
     setChip(key, false, DEFAULT_LABELS[key]);
+    saveToStorage();
     closePanel();
   }
 
@@ -766,6 +771,7 @@
     currentSort = sortKey;
     document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('sort-' + sortKey).classList.add('active');
+    saveToStorage();
     renderTable(rawResults);
   }
 
@@ -1005,6 +1011,83 @@
       });
   }
 
+  // ── 설정 저장/복원 (localStorage) ───────────────────────────────────────
+  const STORAGE_KEY = 'apt_radar_prefs';
+
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        areas: [...activeAreas],
+        areaType,
+        filterState,
+        currentSort,
+      }));
+    } catch(e) {}
+  }
+
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const prefs = JSON.parse(raw);
+
+      if (Array.isArray(prefs.areas) && prefs.areas.length > 0) {
+        activeAreas.clear();
+        prefs.areas.forEach(a => activeAreas.add(a));
+        document.querySelectorAll('.area-tag').forEach(el => {
+          el.classList.toggle('active', activeAreas.has(el.dataset.area));
+        });
+      }
+
+      if (prefs.areaType) {
+        areaType = prefs.areaType;
+        document.getElementById('chip-84').classList.toggle('active', areaType === 84);
+        document.getElementById('chip-59').classList.toggle('active', areaType === 59);
+      }
+
+      if (prefs.currentSort) {
+        currentSort = prefs.currentSort;
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+        const sortEl = document.getElementById('sort-' + currentSort);
+        if (sortEl) sortEl.classList.add('active');
+      }
+
+      if (prefs.filterState) {
+        Object.assign(filterState, prefs.filterState);
+        Object.keys(filterState).forEach(key => {
+          const f = filterState[key];
+          if (!f.active) return;
+          let label = DEFAULT_LABELS[key];
+          if (key === 'year_built' && f.min != null) {
+            setVal('year_built_min', f.min);
+            label = `${f.min}년↑`;
+          } else if (key === 'trade_rate' && f.max != null) {
+            setRange('trade_rate_slider', f.max, 'trade_rate_disp', f.max + '%');
+            label = `실거래회복률 ≤${f.max}%`;
+          } else if (key === 'floor_ratio') {
+            if (f.min != null) setVal('floor_ratio_min', f.min);
+            if (f.max != null) setVal('floor_ratio_max', f.max);
+            label = f.min && f.max ? `용적률 ${f.min}~${f.max}%`
+                   : f.min ? `용적률 ${f.min}%↑` : `용적률 ${f.max}%↓`;
+          } else if (key === 'peak_year') {
+            setVal('peak_year_input', f.value);
+            label = `전고점 ~${f.value}년`;
+          } else if (key === 'household_count' && f.min != null) {
+            setVal('household_count_min', f.min);
+            label = `${f.min.toLocaleString()}세대↑`;
+          } else if (key === 'latest_price') {
+            if (f.min != null) setVal('latest_price_min', f.min);
+            if (f.max != null) setVal('latest_price_max', f.max);
+            label = f.min && f.max ? `${f.min.toLocaleString()}~${f.max.toLocaleString()}만`
+                   : f.min ? `${f.min.toLocaleString()}만↑` : `${f.max.toLocaleString()}만↓`;
+          }
+          setChip(key, true, label);
+        });
+      }
+    } catch(e) {}
+  }
+
+  loadFromStorage();
   loadLastUpdated();
 
   function escHtml(s) {
