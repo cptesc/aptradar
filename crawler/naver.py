@@ -104,6 +104,7 @@ async def _get_complex_list(ctx: BrowserContext, bbox: dict) -> list[dict]:
         coords = c.get("coordinates") or {}
         result.append({
             "complex_no": c["complexNumber"],
+            "complex_name": str(c.get("complexName") or "").strip(),
             "lon": float(coords.get("xCoordinate") or 0),
             "lat": float(coords.get("yCoordinate") or 0),
             "household_count": int(c.get("totalHouseholdNumber") or 0),
@@ -343,7 +344,36 @@ def sync_naver_complex_nos(area_name: str, area_type: int) -> int:
 
     if name_no:
         upsert_naver_complexes(name_no)
-        print(f"  [Naver] {area_name}: {len(name_no)}개 단지 complex_no 저장")
+        print(f"  [Naver] {area_name}: {len(name_no)}개 단지 complex_no 저장 (세대수 매칭)")
+
+    # 세대수 매칭 실패 단지 → 이름 fuzzy 매칭 폴백
+    fallback_candidates = [
+        name for name in molit_names
+        if get_naver_complex_no(name) is None and name not in name_no
+    ]
+    if fallback_candidates and clusters:
+        naver_name_map = {
+            c["complex_name"]: (c["complex_no"], c["household_count"])
+            for c in clusters if c.get("complex_name")
+        }
+        if naver_name_map:
+            fallback_no: dict[str, int] = {}
+            fallback_hh: dict[str, int] = {}
+            for molit_name in fallback_candidates:
+                matched, _ = match_complex(molit_name, list(naver_name_map.keys()))
+                if matched:
+                    no, hh = naver_name_map[matched]
+                    fallback_no[molit_name] = no
+                    if hh > 0:
+                        fallback_hh[molit_name] = hh
+            if fallback_no:
+                upsert_naver_complexes(fallback_no)
+                name_no.update(fallback_no)
+            if fallback_hh:
+                upsert_household_counts(fallback_hh)
+            if fallback_no:
+                print(f"  [Naver] {area_name}: {len(fallback_no)}개 complex_no, "
+                      f"{len(fallback_hh)}개 세대수 업데이트 (이름 매칭)")
 
     return len(name_no)
 
