@@ -231,10 +231,12 @@ def api_send_telegram_message():
     if not _latest_data:
         return jsonify({"error": "분석 결과 없음"}), 400
 
-    sort_key = (request.json or {}).get("sort_by", "trade_rate")
-    ranked = sort_by_rank(_latest_data["web_result"], sort_key)
+    body = request.json or {}
+    apts = body.get("apts")
+    if not apts:
+        return jsonify({"error": "전송할 단지가 없습니다."}), 400
     try:
-        tg_send_report(tg_token, tg_chat, ranked[:20])
+        tg_send_report(tg_token, tg_chat, apts)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 

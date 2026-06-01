@@ -19,7 +19,7 @@ def send_report(token: str, chat_id: str, data: list[dict]) -> None:
 
     emoji = {"RED": "🔴", "YELLOW": "🟡", "GREEN": "🟢"}
     lines = ["<b>🏠 APT Radar 분석 결과</b>", ""]
-    for apt in data[:10]:
+    for apt in data:
         e = emoji.get(apt.get("cycle", ""), "")
         trade_rate = apt.get("trade_rate")
         rate_str = f"{trade_rate:.1f}% {e}" if trade_rate is not None else "-"

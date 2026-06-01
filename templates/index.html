@@ -558,10 +558,17 @@
           <div class="results-title">분석 결과</div>
           <div class="results-meta" id="results-meta"></div>
         </div>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <button class="btn-download" onclick="downloadExcel()">
             <span>📥</span> 엑셀 다운로드
           </button>
+          <div style="display:flex;align-items:center;gap:5px;padding:5px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);">
+            <span style="font-size:0.8125rem;color:var(--muted);">상위</span>
+            <input type="number" id="send-top-n" value="10" min="1"
+              oninput="applyTopN()"
+              style="width:48px;border:none;font-size:0.875rem;font-weight:700;color:var(--primary);text-align:center;outline:none;background:transparent;">
+            <span style="font-size:0.8125rem;color:var(--muted);">개 선택</span>
+          </div>
           <button class="btn-telegram" id="btn-telegram-msg" onclick="sendTelegramMessage()">
             <span>💬</span> 텔레그램 전송
           </button>
@@ -583,6 +590,7 @@
         <table>
           <thead>
             <tr>
+              <th style="width:36px;"></th>
               <th>등수</th>
               <th>단지명</th>
               <th>지역</th>
@@ -614,6 +622,7 @@
   let elapsedTimer = null;
   let elapsedSec = 0;
   let rawResults = [];
+  let renderedApts = [];
   let currentSort = 'trade_rate';
 
   const filterState = {
@@ -871,6 +880,7 @@
 
   function renderTable(apts) {
     const ranked = sortAndRank(apts, currentSort);
+    renderedApts = ranked;
 
     const CYCLE = {
       GREEN:  { label: '🟢 저점',  cls: 'badge-GREEN' },
@@ -881,13 +891,14 @@
 
     const tbody = document.getElementById('results-tbody');
     tbody.innerHTML = '';
-    ranked.forEach(a => {
+    ranked.forEach((a, i) => {
       const cy = CYCLE[a.cycle] || { label: a.cycle, cls: '' };
       const nameHtml = a.url
         ? `<a href="${escHtml(a.url)}" target="_blank" rel="noopener">${escHtml(a.complex_name)}</a>`
         : escHtml(a.complex_name);
       const tr = document.createElement('tr');
       tr.innerHTML =
+        `<td style="text-align:center;"><input type="checkbox" class="row-check" data-i="${i}"></td>` +
         `<td class="num rank">${a.rank}</td>` +
         `<td class="name">${nameHtml}</td>` +
         `<td>${escHtml(a.area_name)}</td>` +
@@ -899,6 +910,20 @@
         `<td><span class="badge ${cy.cls}">${cy.label}</span></td>`;
       tbody.appendChild(tr);
     });
+    applyTopN();
+  }
+
+  function applyTopN() {
+    const n = parseInt(document.getElementById('send-top-n')?.value) || 0;
+    document.querySelectorAll('.row-check').forEach((cb, i) => {
+      cb.checked = i < n;
+    });
+  }
+
+  function getSelectedApts() {
+    return Array.from(document.querySelectorAll('.row-check:checked'))
+      .map(cb => renderedApts[parseInt(cb.dataset.i)])
+      .filter(Boolean);
   }
 
   function showError(msg) {
@@ -912,10 +937,12 @@
   function downloadExcel() { window.location.href = '/api/download'; }
 
   function sendTelegramMessage() {
+    const selected = getSelectedApts();
+    if (selected.length === 0) { alert('전송할 단지를 선택해주세요.'); return; }
     const btn = document.getElementById('btn-telegram-msg');
     btn.disabled = true;
     btn.innerHTML = '<span>⏳</span> 전송 중...';
-    fetch('/api/send_telegram_message', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sort_by: currentSort}) })
+    fetch('/api/send_telegram_message', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({apts: selected}) })
       .then(r => r.json())
       .then(data => {
         if (data.ok) {
