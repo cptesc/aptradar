@@ -10,6 +10,7 @@
 import asyncio
 import json
 import re
+import time
 
 from playwright.async_api import async_playwright, BrowserContext, Page
 from thefuzz import process as fuzz_process
@@ -53,6 +54,19 @@ _AREA_STRICT_BBOX: dict[str, dict] = {
 _MATCH_THRESHOLD = 80
 # 단지명 길이 비율이 이 미만이면 매칭 거부 (짧은 MOLIT 이름이 긴 네이버 이름에 부분 일치하는 오류 방지)
 _MATCH_LEN_RATIO = 0.4
+
+# 서울 개별 구 → "서울시" bbox로 통합 (Playwright 호출 캐시 포함)
+_CLUSTER_CACHE_TTL = 3600  # 1시간
+_cluster_cache: dict[str, tuple[float, list[dict]]] = {}  # bbox_key → (timestamp, clusters)
+
+
+def _get_bbox_key(area_name: str) -> str | None:
+    """area_name을 _AREA_BBOX 키로 변환. 서울 각 구는 '서울시'로 통합."""
+    if area_name in _AREA_BBOX:
+        return area_name
+    if area_name.startswith("서울"):
+        return "서울시"
+    return None
 
 _FILTER_APT_SALE = {
     "tradeTypes": ["A1"], "realEstateTypes": ["A01"],
@@ -307,7 +321,8 @@ def sync_naver_complex_nos(area_name: str, area_type: int) -> int:
     from config import AREA_CODE_MAP
     from data.molit import get_complexes_by_area, get_household_count
 
-    if area_name not in _AREA_BBOX:
+    bbox_key = _get_bbox_key(area_name)
+    if not bbox_key:
         return 0
 
     lawd_cds = AREA_CODE_MAP.get(area_name, [])
@@ -322,11 +337,18 @@ def sync_naver_complex_nos(area_name: str, area_type: int) -> int:
     if not need_mapping:
         return 0
 
-    try:
-        clusters = asyncio.run(_fetch_clusters_async(area_name))
-    except Exception as e:
-        print(f"[Naver 동기화 실패] {area_name}: {e}")
-        return 0
+    # 클러스터 캐시 확인 (bbox_key 단위, 1시간 TTL)
+    now = time.time()
+    cached_entry = _cluster_cache.get(bbox_key)
+    if cached_entry and now - cached_entry[0] < _CLUSTER_CACHE_TTL:
+        clusters = cached_entry[1]
+    else:
+        try:
+            clusters = asyncio.run(_fetch_clusters_async(bbox_key))
+            _cluster_cache[bbox_key] = (now, clusters)
+        except Exception as e:
+            print(f"[Naver 동기화 실패] {bbox_key}: {e}")
+            return 0
 
     # 세대수 → [complex_no] 역매핑
     hh_to_nos: dict[int, list[int]] = {}
