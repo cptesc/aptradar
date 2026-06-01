@@ -160,7 +160,7 @@ def _pipeline_thread(job_id: str, params: dict) -> None:
             web_result = [a for a in web_result if a["latest_trade_price"] <= latest_price_max]
         ranked = sort_by_rank(web_result)
 
-        _latest_data = {"apt_list": apt_list, "trade_rate_max": trade_rate_max}
+        _latest_data = {"apt_list": apt_list, "web_result": web_result, "trade_rate_max": trade_rate_max}
 
         tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         tg_chat = os.getenv("TELEGRAM_CHAT_ID", "")
@@ -232,7 +232,7 @@ def api_send_telegram_message():
         return jsonify({"error": "분석 결과 없음"}), 400
 
     sort_key = (request.json or {}).get("sort_by", "trade_rate")
-    ranked = sort_by_rank(_latest_data["apt_list"], sort_key)
+    ranked = sort_by_rank(_latest_data["web_result"], sort_key)
     try:
         tg_send_report(tg_token, tg_chat, ranked[:20])
     except Exception as exc:
@@ -251,9 +251,10 @@ def api_send_telegram():
         return jsonify({"error": "분석 결과 없음"}), 400
 
     apt_list = _latest_data["apt_list"]
+    web_result = _latest_data["web_result"]
     trade_rate_max = _latest_data["trade_rate_max"]
     sort_key = (request.json or {}).get("sort_by", "trade_rate")
-    ranked = sort_by_rank(apt_list, sort_key)
+    ranked = sort_by_rank(web_result, sort_key)
 
     excel_all = sort_by_rank(apt_list)
     excel_filtered = sort_by_rank(apply_filter(
